@@ -28,7 +28,7 @@ SYSTEM_PROMPT = """당신은 도움이 되는 개인 비서입니다.
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
+    model_name="gemini-1.5-flash",
     system_instruction=SYSTEM_PROMPT,
 )
 
