@@ -101,7 +101,7 @@ async def _send_long_message(update: Update, text: str):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not is_allowed(user_id):
-        await update.message.reply_text("접근 권한이 없습니다.")
+        await update.message.reply_text(f"접근 권한이 없습니다.\n(내 ID: {user_id})")
         return
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
