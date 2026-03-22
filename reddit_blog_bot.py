@@ -1,6 +1,6 @@
 import os
 import praw
-import google.generativeai as genai
+from google import genai
 import requests
 import schedule
 import time
@@ -16,8 +16,7 @@ reddit = praw.Reddit(
     user_agent=os.getenv("REDDIT_USER_AGENT", "blog-bot/1.0"),
 )
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 WP_URL = os.getenv("WP_URL")
 WP_USER = os.getenv("WP_USERNAME")
@@ -67,7 +66,7 @@ def generate_blog_post(posts: list[dict]) -> dict:
 HTML 형식으로 작성해주세요 (WordPress에 바로 게시할 수 있도록).
 제목은 <title> 태그로, 본문은 <content> 태그로 감싸주세요."""
 
-    response = model.generate_content(prompt)
+    response = gemini_client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
     raw = response.text
 
     title = raw.split("<title>")[1].split("</title>")[0].strip() if "<title>" in raw else f"이번 주 AI/기술 트렌드 - {datetime.now().strftime('%Y년 %m월')}"

@@ -1,6 +1,6 @@
 # 텔레그램 Claude 비서 봇
 python-telegram-bot==21.6
-google-generativeai>=0.8.0
+google-genai>=0.8.0
 python-dotenv>=1.0.0
 
 # Reddit 블로그 봇 (선택)
