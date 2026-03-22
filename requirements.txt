@@ -1,0 +1,9 @@
+# 텔레그램 Claude 비서 봇
+python-telegram-bot==21.6
+anthropic>=0.40.0
+python-dotenv>=1.0.0
+
+# Reddit 블로그 봇 (선택)
+praw>=7.7.0
+requests>=2.31.0
+schedule>=1.2.0
