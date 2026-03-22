@@ -1,6 +1,6 @@
 import os
 import praw
-import anthropic
+import google.generativeai as genai
 import requests
 import schedule
 import time
@@ -16,7 +16,8 @@ reddit = praw.Reddit(
     user_agent=os.getenv("REDDIT_USER_AGENT", "blog-bot/1.0"),
 )
 
-claude = anthropic.Anthropic(api_key=os.getenv("CLAUDE_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel(model_name="gemini-1.5-flash")
 
 WP_URL = os.getenv("WP_URL")
 WP_USER = os.getenv("WP_USERNAME")
@@ -42,7 +43,7 @@ def get_top_posts(subreddits: list[str], limit: int = 10) -> list[dict]:
 
 
 def generate_blog_post(posts: list[dict]) -> dict:
-    """Claude API로 한국어 블로그 게시글 생성"""
+    """Gemini API로 한국어 블로그 게시글 생성"""
     posts_text = "\n\n".join([
         f"{i+1}. [{p['subreddit']}] {p['title']}\n"
         f"   추천수: {p['score']:,} | 댓글: {p['num_comments']:,}\n"
@@ -51,12 +52,7 @@ def generate_blog_post(posts: list[dict]) -> dict:
         for i, p in enumerate(posts)
     ])
 
-    message = claude.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[{
-            "role": "user",
-            "content": f"""아래는 이번 주 Reddit r/technology와 r/artificial 에서 가장 주목받은 게시글 5개입니다.
+    prompt = f"""아래는 이번 주 Reddit r/technology와 r/artificial 에서 가장 주목받은 게시글 5개입니다.
 
 {posts_text}
 
@@ -70,10 +66,10 @@ def generate_blog_post(posts: list[dict]) -> dict:
 
 HTML 형식으로 작성해주세요 (WordPress에 바로 게시할 수 있도록).
 제목은 <title> 태그로, 본문은 <content> 태그로 감싸주세요."""
-        }]
-    )
 
-    raw = message.content[0].text
+    response = model.generate_content(prompt)
+    raw = response.text
+
     title = raw.split("<title>")[1].split("</title>")[0].strip() if "<title>" in raw else f"이번 주 AI/기술 트렌드 - {datetime.now().strftime('%Y년 %m월')}"
     content = raw.split("<content>")[1].split("</content>")[0].strip() if "<content>" in raw else raw
 
@@ -111,7 +107,7 @@ def run_weekly_job():
     print("Reddit 인기 게시글 수집 중...")
     posts = get_top_posts(["technology", "artificial"])
 
-    print("Claude API로 블로그 게시글 생성 중...")
+    print("Gemini API로 블로그 게시글 생성 중...")
     blog = generate_blog_post(posts)
 
     print("WordPress에 업로드 중...")
@@ -122,7 +118,6 @@ if __name__ == "__main__":
     print("블로그 자동화 봇 시작")
     print("매주 월요일 오전 9시에 자동 실행됩니다.\n")
 
-    # 매주 월요일 09:00에 실행
     schedule.every().monday.at("09:00").do(run_weekly_job)
 
     # 시작 시 즉시 1회 실행하려면 아래 주석 해제
