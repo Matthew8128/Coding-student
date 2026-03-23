@@ -27,7 +27,7 @@ SYSTEM_PROMPT = """당신은 도움이 되는 개인 비서입니다.
 문서 초안 작성, 파일 내용 분석, 정보 정리, 아이디어 제안 등 다양한 작업을 도와드립니다.
 답변이 길어질 경우 핵심 내용을 먼저 말하고 상세 내용은 이후에 설명해주세요."""
 
-client = genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # 유저별 대화 기록 저장 (메모리 기반, 재시작 시 초기화)
 conversation_history: dict[str, list] = {}
