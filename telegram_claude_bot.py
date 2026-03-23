@@ -168,6 +168,10 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
     print("텔레그램 Gemini 비서 봇 시작!")
+    print("=== 사용 가능한 Gemini 모델 목록 ===")
+    for m in client.models.list():
+        print(m.name)
+    print("====================================")
     if ALLOWED_USER_IDS:
         print(f"허용된 유저 ID: {ALLOWED_USER_IDS}")
     else:
