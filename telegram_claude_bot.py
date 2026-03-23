@@ -85,7 +85,7 @@ async def _call_gemini(user_id: int, user_content: str) -> str:
 
     response = await asyncio.to_thread(
         client.models.generate_content,
-        model="gemini-2.0-flash-001",
+        model="gemini-2.5-flash",
         contents=contents,
         config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
     )
