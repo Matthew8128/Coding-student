@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- 클라이언트 초기화 ---
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+HN_API = "https://hacker-news.firebaseio.com/v0"
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -18,41 +18,46 @@ WP_USER = os.getenv("WP_USERNAME")
 WP_PASS = os.getenv("WP_APP_PASSWORD")
 
 
-def get_top_posts(subreddits: list[str], limit: int = 10) -> list[dict]:
-    """여러 서브레딧에서 주간 인기 게시글 수집 (인증 없이 JSON API 사용)"""
+def get_top_posts(limit: int = 5) -> list[dict]:
+    """Hacker News에서 인기 게시글 수집"""
+    response = requests.get(f"{HN_API}/topstories.json", timeout=10)
+    if response.status_code != 200:
+        print(f"[경고] Hacker News 데이터 수집 실패: {response.status_code}")
+        return []
+
+    story_ids = response.json()[:30]
     posts = []
-    for sub in subreddits:
-        url = f"https://www.reddit.com/r/{sub}/top.json?t=week&limit={limit}"
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
-            print(f"[경고] r/{sub} 데이터 수집 실패: {response.status_code}")
+    for story_id in story_ids:
+        r = requests.get(f"{HN_API}/item/{story_id}.json", timeout=10)
+        if r.status_code != 200:
             continue
-        for item in response.json()["data"]["children"]:
-            p = item["data"]
-            posts.append({
-                "subreddit": sub,
-                "title": p["title"],
-                "score": p["score"],
-                "url": p["url"],
-                "selftext": p.get("selftext", "")[:500],
-                "num_comments": p["num_comments"],
-            })
-    # 점수 기준 정렬 후 상위 5개
+        item = r.json()
+        if not item or item.get("type") != "story" or not item.get("title"):
+            continue
+        posts.append({
+            "source": "Hacker News",
+            "title": item.get("title", ""),
+            "score": item.get("score", 0),
+            "url": item.get("url", f"https://news.ycombinator.com/item?id={story_id}"),
+            "num_comments": item.get("descendants", 0),
+        })
+        if len(posts) >= limit:
+            break
+
     posts.sort(key=lambda x: x["score"], reverse=True)
-    return posts[:5]
+    return posts[:limit]
 
 
 def generate_blog_post(posts: list[dict]) -> dict:
     """Gemini API로 한국어 블로그 게시글 생성"""
     posts_text = "\n\n".join([
-        f"{i+1}. [{p['subreddit']}] {p['title']}\n"
+        f"{i+1}. {p['title']}\n"
         f"   추천수: {p['score']:,} | 댓글: {p['num_comments']:,}\n"
-        f"   링크: {p['url']}\n"
-        f"   내용: {p['selftext']}"
+        f"   링크: {p['url']}"
         for i, p in enumerate(posts)
     ])
 
-    prompt = f"""아래는 이번 주 Reddit r/technology와 r/artificial 에서 가장 주목받은 게시글 5개입니다.
+    prompt = f"""아래는 이번 주 Hacker News에서 가장 주목받은 기술/AI 게시글 5개입니다.
 
 {posts_text}
 
@@ -104,11 +109,11 @@ def run_weekly_job():
     """매주 실행되는 메인 작업"""
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 주간 블로그 자동화 시작...")
 
-    print("Reddit 인기 게시글 수집 중...")
-    posts = get_top_posts(["technology", "artificial"])
+    print("Hacker News 인기 게시글 수집 중...")
+    posts = get_top_posts()
 
     if not posts:
-        print("[오류] Reddit 데이터 수집 실패 - 게시글이 없습니다. 종료합니다.")
+        print("[오류] 데이터 수집 실패 - 게시글이 없습니다. 종료합니다.")
         return
 
     print("Gemini API로 블로그 게시글 생성 중...")
@@ -123,9 +128,6 @@ if __name__ == "__main__":
     print("매주 월요일 오전 9시에 자동 실행됩니다.\n")
 
     schedule.every().monday.at("09:00").do(run_weekly_job)
-
-    # 시작 시 즉시 1회 실행하려면 아래 주석 해제
-    # run_weekly_job()
 
     while True:
         schedule.run_pending()
