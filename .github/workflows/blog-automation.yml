@@ -24,7 +24,7 @@ jobs:
       - name: Run blog bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL_NAME: gemini-1.5-flash-latest
+          GEMINI_MODEL_NAME: gemini-2.5-flash
           WP_URL: ${{ secrets.WP_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
