@@ -50,6 +50,10 @@ def get_top_posts(limit: int = 5) -> list[dict]:
 
 def generate_blog_post(posts: list[dict]) -> dict:
     """Gemini API로 한국어 블로그 게시글 생성"""
+    now = datetime.now()
+    week_num = (now.day - 1) // 7 + 1
+    current_date_str = f"{now.year}년 {now.month}월 {week_num}주차"
+
     posts_text = "\n\n".join([
         f"{i+1}. {p['title']}\n"
         f"   추천수: {p['score']:,} | 댓글: {p['num_comments']:,}\n"
@@ -58,12 +62,13 @@ def generate_blog_post(posts: list[dict]) -> dict:
     ])
 
     prompt = f"""아래는 이번 주 Hacker News에서 가장 주목받은 기술/AI 게시글 5개입니다.
+오늘 날짜: {now.strftime('%Y년 %m월 %d일')}
 
 {posts_text}
 
 이를 바탕으로 한국어 블로그 게시글을 작성해주세요. 형식은 아래와 같습니다:
 
-1. **제목**: 이번 주 AI/기술 트렌드 요약 (날짜 포함, 예: 2025년 1월 1주차)
+1. **제목**: 이번 주 AI/기술 트렌드 요약 ({current_date_str})
 2. **도입부**: 이번 주 전반적인 트렌드 2-3문장 요약
 3. **TOP 5 이슈**: 각 게시글을 한국어로 요약 (각 150자 내외)
 4. **트렌드 분석**: 이번 주 이슈들의 공통점, 시사점, 앞으로의 전망 (300자 내외)
