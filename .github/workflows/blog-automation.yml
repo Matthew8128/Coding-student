@@ -1,0 +1,30 @@
+name: Weekly Blog Automation
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 오전 9시 (KST = UTC+9)
+  workflow_dispatch:       # 수동 실행 버튼
+
+jobs:
+  post-blog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run blog bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+        run: python -c "from reddit_blog_bot import run_weekly_job; run_weekly_job()"
