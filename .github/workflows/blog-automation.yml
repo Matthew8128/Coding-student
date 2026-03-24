@@ -28,4 +28,12 @@ jobs:
           WP_URL: ${{ secrets.WP_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-        run: python -c "from reddit_blog_bot import run_weekly_job; run_weekly_job()"
+        run: |
+          python -c "
+          import os
+          from google import genai
+          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+          for m in client.models.list():
+              print(m.name)
+          "
+          python -c "from reddit_blog_bot import run_weekly_job; run_weekly_job()"
