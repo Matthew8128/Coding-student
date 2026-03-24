@@ -72,7 +72,8 @@ def generate_blog_post(posts: list[dict]) -> dict:
 HTML 형식으로 작성해주세요 (WordPress에 바로 게시할 수 있도록).
 제목은 <title> 태그로, 본문은 <content> 태그로 감싸주세요."""
 
-    response = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    model = os.getenv("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+    response = gemini_client.models.generate_content(model=model, contents=prompt)
     raw = response.text
 
     title = raw.split("<title>")[1].split("</title>")[0].strip() if "<title>" in raw else f"이번 주 AI/기술 트렌드 - {datetime.now().strftime('%Y년 %m월')}"
