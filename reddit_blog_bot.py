@@ -1,5 +1,4 @@
 import os
-import praw
 from google import genai
 import requests
 import schedule
@@ -10,11 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- 클라이언트 초기화 ---
-reddit = praw.Reddit(
-    client_id=os.getenv("REDDIT_CLIENT_ID"),
-    client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-    user_agent=os.getenv("REDDIT_USER_AGENT", "blog-bot/1.0"),
-)
+HEADERS = {"User-Agent": "blog-bot/1.0 by PaintingSevere6107"}
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -24,17 +19,23 @@ WP_PASS = os.getenv("WP_APP_PASSWORD")
 
 
 def get_top_posts(subreddits: list[str], limit: int = 10) -> list[dict]:
-    """여러 서브레딧에서 주간 인기 게시글 수집"""
+    """여러 서브레딧에서 주간 인기 게시글 수집 (인증 없이 JSON API 사용)"""
     posts = []
     for sub in subreddits:
-        for post in reddit.subreddit(sub).top(time_filter="week", limit=limit):
+        url = f"https://www.reddit.com/r/{sub}/top.json?t=week&limit={limit}"
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code != 200:
+            print(f"[경고] r/{sub} 데이터 수집 실패: {response.status_code}")
+            continue
+        for item in response.json()["data"]["children"]:
+            p = item["data"]
             posts.append({
                 "subreddit": sub,
-                "title": post.title,
-                "score": post.score,
-                "url": post.url,
-                "selftext": post.selftext[:500] if post.selftext else "",
-                "num_comments": post.num_comments,
+                "title": p["title"],
+                "score": p["score"],
+                "url": p["url"],
+                "selftext": p.get("selftext", "")[:500],
+                "num_comments": p["num_comments"],
             })
     # 점수 기준 정렬 후 상위 5개
     posts.sort(key=lambda x: x["score"], reverse=True)
