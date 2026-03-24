@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- 클라이언트 초기화 ---
-HEADERS = {"User-Agent": "blog-bot/1.0 by PaintingSevere6107"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -67,7 +67,7 @@ def generate_blog_post(posts: list[dict]) -> dict:
 HTML 형식으로 작성해주세요 (WordPress에 바로 게시할 수 있도록).
 제목은 <title> 태그로, 본문은 <content> 태그로 감싸주세요."""
 
-    response = gemini_client.models.generate_content(model="gemini-2.0-flash-lite", contents=prompt)
+    response = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     raw = response.text
 
     title = raw.split("<title>")[1].split("</title>")[0].strip() if "<title>" in raw else f"이번 주 AI/기술 트렌드 - {datetime.now().strftime('%Y년 %m월')}"
@@ -106,6 +106,10 @@ def run_weekly_job():
 
     print("Reddit 인기 게시글 수집 중...")
     posts = get_top_posts(["technology", "artificial"])
+
+    if not posts:
+        print("[오류] Reddit 데이터 수집 실패 - 게시글이 없습니다. 종료합니다.")
+        return
 
     print("Gemini API로 블로그 게시글 생성 중...")
     blog = generate_blog_post(posts)
