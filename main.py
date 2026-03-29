@@ -12,6 +12,8 @@ def run_reddit_scheduler():
         time.sleep(60)
 
 
+run_weekly_job()
+
 reddit_thread = threading.Thread(target=run_reddit_scheduler, daemon=True)
 reddit_thread.start()
 
