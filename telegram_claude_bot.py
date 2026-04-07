@@ -12,6 +12,7 @@ from telegram.ext import (
     ContextTypes,
 )
 from dotenv import load_dotenv
+from youtube_summarizer import process_youtube_url
 
 load_dotenv()
 
@@ -45,6 +46,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "메시지를 보내면 답변해드립니다.\n"
         "텍스트 파일을 첨부하면 내용을 읽고 분석해드립니다.\n\n"
         "명령어:\n"
+        "/youtube [URL] — 유튜브 영상 요약 후 블로그 포스팅\n"
         "/clear — 대화 기록 초기화\n"
         "/help — 도움말"
     )
@@ -55,11 +57,13 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "사용법:\n\n"
         "• 메시지 입력 → Gemini가 답변\n"
         "• 텍스트 파일 첨부 (+ 지시사항) → 파일 분석\n"
+        "• /youtube [유튜브 URL] → 영상 요약 후 '삶을 바꾸는 작은 실천' 카테고리에 자동 포스팅\n"
         "• /clear → 대화 기록 초기화 (새 주제 시작 시)\n\n"
         "활용 예시:\n"
         "— '이 내용으로 이메일 초안 써줘'\n"
         "— '요점만 정리해줘'\n"
-        "— 파일 첨부 후 '이 문서 요약해줘'"
+        "— 파일 첨부 후 '이 문서 요약해줘'\n"
+        "— /youtube https://youtu.be/xxxxx"
     )
 
 
@@ -67,6 +71,38 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conversation_history[user_id] = []
     await update.message.reply_text("대화 기록을 초기화했습니다. 새로운 대화를 시작하세요.")
+
+
+async def cmd_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not is_allowed(user_id):
+        await update.message.reply_text("접근 권한이 없습니다.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "사용법: /youtube [유튜브 URL]\n\n예시:\n/youtube https://youtu.be/xxxxx"
+        )
+        return
+
+    url = context.args[0]
+    await update.message.reply_text("영상 자막을 가져오는 중입니다... 잠시만 기다려주세요.")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    try:
+        result = await asyncio.to_thread(process_youtube_url, url)
+        if result.get("success"):
+            await update.message.reply_text(
+                f"블로그 포스팅 완료!\n\n"
+                f"제목: {result.get('title', '')}\n"
+                f"링크: {result.get('url', '')}"
+            )
+        else:
+            await update.message.reply_text(
+                f"포스팅 실패: {result.get('error', '알 수 없는 오류')}"
+            )
+    except Exception as e:
+        await update.message.reply_text(f"오류가 발생했습니다: {e}")
 
 
 async def _call_gemini(user_id: int, user_content: str) -> str:
@@ -164,6 +200,7 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("clear", cmd_clear))
+    app.add_handler(CommandHandler("youtube", cmd_youtube))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
