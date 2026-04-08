@@ -9,3 +9,6 @@ schedule>=1.2.0
 
 # YouTube 요약 봇
 youtube-transcript-api>=0.6.2
+
+# Claude API (Gemini 백업)
+anthropic>=0.40.0

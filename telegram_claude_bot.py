@@ -3,6 +3,7 @@ import asyncio
 import tempfile
 from google import genai
 from google.genai import types
+import anthropic
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -18,6 +19,7 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 # 보안: 허용할 텔레그램 유저 ID (쉼표로 여러 명 가능, 비워두면 전체 허용)
 ALLOWED_USER_IDS = set(
     uid.strip() for uid in os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").split(",") if uid.strip()
@@ -28,7 +30,8 @@ SYSTEM_PROMPT = """당신은 도움이 되는 개인 비서입니다.
 문서 초안 작성, 파일 내용 분석, 정보 정리, 아이디어 제안 등 다양한 작업을 도와드립니다.
 답변이 길어질 경우 핵심 내용을 먼저 말하고 상세 내용은 이후에 설명해주세요."""
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+claude_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 # 유저별 대화 기록 저장 (메모리 기반, 재시작 시 초기화)
 conversation_history: dict[str, list] = {}
@@ -105,31 +108,62 @@ async def cmd_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"오류가 발생했습니다: {e}")
 
 
-async def _call_gemini(user_id: int, user_content: str) -> str:
-    if user_id not in conversation_history:
-        conversation_history[user_id] = []
-
-    # 기존 대화 기록을 새 SDK 형식으로 변환
-    contents = [
-        types.Content(
-            role="user" if msg["role"] == "user" else "model",
-            parts=[types.Part(text=msg["content"])]
-        )
-        for msg in conversation_history[user_id]
-    ]
-    contents.append(types.Content(role="user", parts=[types.Part(text=user_content)]))
+async def _call_claude(user_id: int, user_content: str) -> str:
+    """Claude API 호출 (Gemini 실패 시 백업)"""
+    history = conversation_history.get(user_id, [])
+    messages = [{"role": msg["role"] if msg["role"] != "assistant" else "assistant",
+                 "content": msg["content"]} for msg in history]
+    messages.append({"role": "user", "content": user_content})
 
     response = await asyncio.to_thread(
-        client.models.generate_content,
-        model="gemini-2.5-flash",
-        contents=contents,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        claude_client.messages.create,
+        model="claude-haiku-4-5-20251001",
+        max_tokens=2048,
+        system=SYSTEM_PROMPT,
+        messages=messages,
     )
-    reply = response.text
+    reply = response.content[0].text
 
+    if user_id not in conversation_history:
+        conversation_history[user_id] = []
     conversation_history[user_id].append({"role": "user", "content": user_content})
     conversation_history[user_id].append({"role": "assistant", "content": reply})
     return reply
+
+
+async def _call_ai(user_id: int, user_content: str) -> str:
+    """Gemini 우선 호출, 실패 시 Claude로 자동 전환"""
+    if user_id not in conversation_history:
+        conversation_history[user_id] = []
+
+    # Gemini 시도
+    try:
+        contents = [
+            types.Content(
+                role="user" if msg["role"] == "user" else "model",
+                parts=[types.Part(text=msg["content"])]
+            )
+            for msg in conversation_history[user_id]
+        ]
+        contents.append(types.Content(role="user", parts=[types.Part(text=user_content)]))
+
+        response = await asyncio.to_thread(
+            gemini_client.models.generate_content,
+            model=os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-flash"),
+            contents=contents,
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        )
+        reply = response.text
+        conversation_history[user_id].append({"role": "user", "content": user_content})
+        conversation_history[user_id].append({"role": "assistant", "content": reply})
+        return reply
+
+    except Exception as gemini_err:
+        # Gemini 실패 → Claude 백업
+        if claude_client:
+            print(f"[Gemini 실패, Claude로 전환] {gemini_err}")
+            return await _call_claude(user_id, user_content)
+        raise gemini_err
 
 
 async def _send_long_message(update: Update, text: str):
@@ -148,7 +182,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     try:
-        reply = await _call_gemini(user_id, update.message.text)
+        reply = await _call_ai(user_id, update.message.text)
         await _send_long_message(update, reply)
     except Exception as e:
         await update.message.reply_text(f"오류가 발생했습니다: {e}")
@@ -183,7 +217,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_content = file_content[:12000] + "\n\n[파일이 길어서 앞부분만 포함했습니다]"
 
         user_content = f"{caption}\n\n파일명: {doc.file_name}\n\n--- 파일 내용 ---\n{file_content}"
-        reply = await _call_gemini(user_id, user_content)
+        reply = await _call_ai(user_id, user_content)
         await _send_long_message(update, reply)
     except Exception as e:
         await update.message.reply_text(f"파일 처리 중 오류가 발생했습니다: {e}")
